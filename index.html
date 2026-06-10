@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Precipitation Checker</title>
+    <meta name="description" content="Check today's precipitation reports across 10 major US cities in real-time using NWS data.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #111827;
+            --bg-card: rgba(17, 24, 39, 0.6);
+            --bg-card-hover: rgba(30, 41, 59, 0.7);
+            --border-subtle: rgba(99, 102, 241, 0.15);
+            --border-glow: rgba(99, 102, 241, 0.4);
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-blue: #6366f1;
+            --accent-cyan: #22d3ee;
+            --accent-green: #34d399;
+            --accent-amber: #fbbf24;
+            --accent-red: #f87171;
+            --rain-blue: #38bdf8;
+            --rain-bg: rgba(56, 189, 248, 0.08);
+            --dry-green: #34d399;
+            --dry-bg: rgba(52, 211, 153, 0.08);
+            --shadow-lg: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Animated background */
+        .bg-gradient {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        .bg-gradient::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(ellipse at 20% 50%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+                        radial-gradient(ellipse at 80% 20%, rgba(34, 211, 238, 0.06) 0%, transparent 50%),
+                        radial-gradient(ellipse at 50% 80%, rgba(139, 92, 246, 0.05) 0%, transparent 50%);
+            animation: bgShift 20s ease-in-out infinite;
+        }
+
+        @keyframes bgShift {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            33% { transform: translate(-2%, 1%) rotate(1deg); }
+            66% { transform: translate(1%, -1%) rotate(-0.5deg); }
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem 4rem;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+            animation: fadeInDown 0.8s ease-out;
+        }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .header-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            display: inline-block;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.02em;
+        }
+
+        .header .subtitle {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            font-weight: 300;
+        }
+
+        .header .date-display {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            padding: 0.5rem 1.25rem;
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid var(--border-subtle);
+            border-radius: 100px;
+            font-size: 0.9rem;
+            color: var(--accent-cyan);
+            font-weight: 500;
+        }
+
+        /* Summary bar */
+        .summary-bar {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-bottom: 2.5rem;
+            flex-wrap: wrap;
+            animation: fadeIn 1s ease-out 0.3s both;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .summary-stat {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1.5rem;
+            background: var(--bg-card);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+        }
+
+        .summary-stat .stat-icon {
+            font-size: 1.5rem;
+        }
+
+        .summary-stat .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .summary-stat .stat-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .summary-stat.rain .stat-value { color: var(--rain-blue); }
+        .summary-stat.dry .stat-value { color: var(--dry-green); }
+        .summary-stat.loading .stat-value { color: var(--text-muted); }
+        .summary-stat.error .stat-value { color: var(--accent-red); }
+
+        /* Grid */
+        .stations-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 1.25rem;
+        }
+
+        /* Station Card */
+        .station-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-subtle);
+            border-radius: 20px;
+            padding: 1.5rem;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            animation: cardAppear 0.6s ease-out both;
+        }
+
+        .station-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, var(--accent-blue), transparent);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .station-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--border-glow);
+            box-shadow: var(--shadow-lg), 0 0 30px rgba(99, 102, 241, 0.1);
+        }
+
+        .station-card:hover::before {
+            opacity: 1;
+        }
+
+        @keyframes cardAppear {
+            from { opacity: 0; transform: translateY(20px) scale(0.97); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .station-card:nth-child(1) { animation-delay: 0.1s; }
+        .station-card:nth-child(2) { animation-delay: 0.15s; }
+        .station-card:nth-child(3) { animation-delay: 0.2s; }
+        .station-card:nth-child(4) { animation-delay: 0.25s; }
+        .station-card:nth-child(5) { animation-delay: 0.3s; }
+        .station-card:nth-child(6) { animation-delay: 0.35s; }
+        .station-card:nth-child(7) { animation-delay: 0.4s; }
+        .station-card:nth-child(8) { animation-delay: 0.45s; }
+        .station-card:nth-child(9) { animation-delay: 0.5s; }
+        .station-card:nth-child(10) { animation-delay: 0.55s; }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+
+        .station-name {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .station-id {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-weight: 500;
+            letter-spacing: 0.08em;
+            margin-top: 2px;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.3rem 0.75rem;
+            border-radius: 100px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            white-space: nowrap;
+        }
+
+        .status-badge.rain {
+            background: var(--rain-bg);
+            color: var(--rain-blue);
+            border: 1px solid rgba(56, 189, 248, 0.25);
+        }
+
+        .status-badge.dry {
+            background: var(--dry-bg);
+            color: var(--dry-green);
+            border: 1px solid rgba(52, 211, 153, 0.25);
+        }
+
+        .status-badge.loading {
+            background: rgba(100, 116, 139, 0.15);
+            color: var(--text-muted);
+            border: 1px solid rgba(100, 116, 139, 0.25);
+        }
+
+        .status-badge.error {
+            background: rgba(248, 113, 113, 0.1);
+            color: var(--accent-red);
+            border: 1px solid rgba(248, 113, 113, 0.25);
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-badge.rain .status-dot { background: var(--rain-blue); box-shadow: 0 0 6px var(--rain-blue); }
+        .status-badge.dry .status-dot { background: var(--dry-green); box-shadow: 0 0 6px var(--dry-green); }
+        .status-badge.loading .status-dot { background: var(--text-muted); animation: pulse 1.5s infinite; }
+        .status-badge.error .status-dot { background: var(--accent-red); }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .card-body {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.35rem 0;
+            font-size: 0.85rem;
+        }
+
+        .detail-label {
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .detail-value {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .detail-value.precip {
+            color: var(--rain-blue);
+            font-weight: 600;
+        }
+
+        .detail-value.zero-precip {
+            color: var(--text-muted);
+        }
+
+        .precip-table {
+            margin-top: 0.5rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid rgba(99, 102, 241, 0.1);
+        }
+
+        .precip-table-title {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 0.5rem;
+        }
+
+        .precip-table-header,
+        .precip-table-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 0.25rem;
+            padding: 0.3rem 0.5rem;
+            font-size: 0.78rem;
+            border-radius: 6px;
+        }
+
+        .precip-table-header {
+            color: var(--text-muted);
+            font-weight: 600;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            padding-bottom: 0.4rem;
+            border-bottom: 1px solid rgba(99, 102, 241, 0.08);
+            margin-bottom: 0.25rem;
+        }
+
+        .precip-table-row {
+            transition: background 0.2s ease;
+        }
+
+        .precip-table-row:hover {
+            background: rgba(56, 189, 248, 0.06);
+        }
+
+        .precip-table-row .time-col {
+            color: var(--text-secondary);
+        }
+
+        .precip-table-row .precip-col {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .precip-col.has-precip {
+            color: var(--rain-blue);
+            font-weight: 600;
+        }
+
+        .precip-col.no-precip {
+            color: var(--text-muted);
+        }
+
+        .card-footer {
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid rgba(99, 102, 241, 0.08);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nws-link {
+            font-size: 0.78rem;
+            color: var(--accent-blue);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            transition: color 0.2s ease;
+        }
+
+        .nws-link:hover {
+            color: var(--accent-cyan);
+        }
+
+        .last-updated {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+
+        /* Loading skeleton */
+        .skeleton {
+            background: linear-gradient(90deg,
+                rgba(99, 102, 241, 0.05) 25%,
+                rgba(99, 102, 241, 0.1) 50%,
+                rgba(99, 102, 241, 0.05) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s ease-in-out infinite;
+            border-radius: 6px;
+            height: 1em;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        .skeleton-line {
+            height: 14px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+        }
+
+        .skeleton-line.short { width: 60%; }
+        .skeleton-line.medium { width: 80%; }
+
+        /* Rain animation overlay */
+        .station-card.has-rain {
+            border-color: rgba(56, 189, 248, 0.2);
+        }
+
+        .station-card.has-rain .rain-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            overflow: hidden;
+            border-radius: 20px;
+        }
+
+        .raindrop {
+            position: absolute;
+            width: 1px;
+            background: linear-gradient(to bottom, transparent, rgba(56, 189, 248, 0.3));
+            animation: raindropFall linear infinite;
+            opacity: 0;
+        }
+
+        @keyframes raindropFall {
+            0% { transform: translateY(-10px); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { transform: translateY(100%); opacity: 0; }
+        }
+
+        /* Refresh button */
+        .refresh-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem 1.5rem;
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 12px;
+            color: var(--accent-blue);
+            font-family: 'Inter', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 1rem;
+        }
+
+        .refresh-btn:hover {
+            background: rgba(99, 102, 241, 0.25);
+            border-color: rgba(99, 102, 241, 0.5);
+            transform: translateY(-1px);
+        }
+
+        .refresh-btn:active {
+            transform: translateY(0);
+        }
+
+        .refresh-btn .spin {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .footer-info {
+            text-align: center;
+            margin-top: 3rem;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        .footer-info a {
+            color: var(--accent-blue);
+            text-decoration: none;
+        }
+
+        .retry-note {
+            font-size: 0.72rem;
+            color: var(--accent-amber);
+            margin-top: 0.25rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container { padding: 1.25rem 1rem 3rem; }
+            .header h1 { font-size: 1.75rem; }
+            .stations-grid { grid-template-columns: 1fr; }
+            .summary-bar { gap: 0.75rem; }
+            .summary-stat { padding: 0.5rem 1rem; }
+            .precip-table-header,
+            .precip-table-row {
+                font-size: 0.72rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-gradient"></div>
+    <div class="container">
+        <header class="header" id="header">
+            <div class="header-icon">🌧️</div>
+            <h1>Precipitation Checker</h1>
+            <p class="subtitle">Real-time precipitation reports from 10 major US stations</p>
+            <div class="date-display" id="dateDisplay">
+                <span>📅</span>
+                <span id="currentDate">Loading...</span>
+            </div>
+        </header>
+
+        <div class="summary-bar" id="summaryBar">
+            <div class="summary-stat loading" id="summaryRain">
+                <span class="stat-icon">🌧️</span>
+                <div>
+                    <div class="stat-value" id="rainCount">—</div>
+                    <div class="stat-label">Reporting Rain</div>
+                </div>
+            </div>
+            <div class="summary-stat loading" id="summaryDry">
+                <span class="stat-icon">☀️</span>
+                <div>
+                    <div class="stat-value" id="dryCount">—</div>
+                    <div class="stat-label">Dry</div>
+                </div>
+            </div>
+            <div class="summary-stat loading" id="summaryPending">
+                <span class="stat-icon">⏳</span>
+                <div>
+                    <div class="stat-value" id="pendingCount">10</div>
+                    <div class="stat-label">Checking</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="stations-grid" id="stationsGrid"></div>
+
+        <div style="text-align: center;">
+            <button class="refresh-btn" id="refreshBtn" onclick="refreshAll()">
+                <span id="refreshIcon">🔄</span> Refresh All
+            </button>
+        </div>
+
+        <div class="footer-info">
+            Data sourced from <a href="https://api.weather.gov" target="_blank" rel="noopener">NWS API (api.weather.gov)</a> · No API key required · Stations report hourly
+        </div>
+    </div>
+
+    <script>
+        const STATIONS = [
+            { id: 'KNYC', name: 'New York City', subtitle: 'Central Park', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=knyc' },
+            { id: 'KLAX', name: 'Los Angeles', subtitle: 'LAX Airport', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=KLAX' },
+            { id: 'KMDW', name: 'Chicago', subtitle: 'Midway Airport', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=KMDW' },
+            { id: 'KSFO', name: 'San Francisco', subtitle: 'SFO Airport', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=ksfo' },
+            { id: 'KAUS', name: 'Austin', subtitle: 'Austin-Bergstrom', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=KAUS' },
+            { id: 'KMIA', name: 'Miami', subtitle: 'MIA Airport', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=KMIA' },
+            { id: 'KDFW', name: 'Dallas / Fort Worth', subtitle: 'DFW Airport', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=Kdfw' },
+            { id: 'KHOU', name: 'Houston', subtitle: 'Hobby Airport', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=KHOU' },
+            { id: 'KDEN', name: 'Denver', subtitle: 'Denver Intl.', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=KDEN' },
+            { id: 'KSEA', name: 'Seattle', subtitle: 'Sea-Tac Airport', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=ksea' },
+        ];
+
+        let stationResults = {};
+
+        function formatDate(date) {
+            return date.toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        }
+
+        function formatTime(isoString) {
+            const d = new Date(isoString);
+            return d.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+        }
+
+        // Convert raw precip value to inches based on unit code
+        function precipToInches(value, unitCode) {
+            if (value === null || value === undefined) return null;
+            if (value === 0) return 0;
+            const unit = (unitCode || '').toLowerCase();
+            if (unit.includes('mm')) {
+                return value / 25.4; // mm to inches
+            } else if (unit.includes(':m')) {
+                return value * 39.3701; // meters to inches
+            }
+            // Assume mm if unclear
+            return value / 25.4;
+        }
+
+        function formatInches(inches) {
+            if (inches === null || inches === undefined) return '—';
+            if (inches === 0) return '0.00"';
+            return inches.toFixed(2) + '"';
+        }
+
+        function getTodayStartUTC() {
+            const now = new Date();
+            const start = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0));
+            return start.toISOString();
+        }
+
+        function createSkeletonCard(station) {
+            return `
+                <div class="station-card" id="card-${station.id}">
+                    <div class="card-header">
+                        <div>
+                            <div class="station-name">${station.name}</div>
+                            <div class="station-id">${station.id} · ${station.subtitle}</div>
+                        </div>
+                        <span class="status-badge loading">
+                            <span class="status-dot"></span>
+                            Checking…
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <div class="skeleton skeleton-line medium"></div>
+                        <div class="skeleton skeleton-line short"></div>
+                        <div class="skeleton skeleton-line medium"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function createRaindrops() {
+            let drops = '';
+            for (let i = 0; i < 15; i++) {
+                const left = Math.random() * 100;
+                const delay = Math.random() * 3;
+                const duration = 1 + Math.random() * 2;
+                const height = 10 + Math.random() * 20;
+                drops += `<div class="raindrop" style="left:${left}%;height:${height}px;animation-delay:${delay}s;animation-duration:${duration}s;"></div>`;
+            }
+            return `<div class="rain-overlay">${drops}</div>`;
+        }
+
+        function renderCard(station, result) {
+            const card = document.getElementById(`card-${station.id}`);
+            if (!card) return;
+
+            const hasPrecip = result.hasPrecipitation;
+            const statusClass = result.error ? 'error' : (hasPrecip ? 'rain' : 'dry');
+            const statusText = result.error ? 'Error' : (hasPrecip ? 'Rain Detected' : 'Dry');
+
+            let bodyHTML = '';
+
+            if (result.error) {
+                bodyHTML = `
+                    <div class="detail-row">
+                        <span class="detail-label">⚠️ Error</span>
+                        <span class="detail-value" style="color: var(--accent-red); font-size: 0.8rem;">${result.error}</span>
+                    </div>
+                `;
+                if (result.retries > 0) {
+                    bodyHTML += `<div class="retry-note">Retried ${result.retries} time${result.retries > 1 ? 's' : ''}</div>`;
+                }
+            } else {
+                // Current conditions
+                bodyHTML = `
+                    <div class="detail-row">
+                        <span class="detail-label">🌡️ Current Temp</span>
+                        <span class="detail-value">${result.currentTemp !== null ? result.currentTemp + '°F' : '—'}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">🌤️ Conditions</span>
+                        <span class="detail-value">${result.currentDesc || '—'}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">💧 Today's Total</span>
+                        <span class="detail-value ${result.totalPrecipInches > 0 ? 'precip' : 'zero-precip'}">${formatInches(result.totalPrecipInches)}</span>
+                    </div>
+                `;
+
+                // Precipitation table — show observations with precip data
+                if (result.precipRows && result.precipRows.length > 0) {
+                    bodyHTML += `
+                        <div class="precip-table">
+                            <div class="precip-table-title">Hourly Precipitation (inches)</div>
+                            <div class="precip-table-header">
+                                <span>Time</span>
+                                <span style="text-align:right">1 Hr</span>
+                                <span style="text-align:right">6 Hr</span>
+                                <span style="text-align:right">24 Hr</span>
+                            </div>
+                            ${result.precipRows.map(row => `
+                                <div class="precip-table-row">
+                                    <span class="time-col">${formatTime(row.time)}</span>
+                                    <span class="precip-col ${row.p1h > 0 ? 'has-precip' : 'no-precip'}">${formatInches(row.p1h)}</span>
+                                    <span class="precip-col ${row.p6h > 0 ? 'has-precip' : 'no-precip'}">${formatInches(row.p6h)}</span>
+                                    <span class="precip-col ${row.p24h > 0 ? 'has-precip' : 'no-precip'}">${formatInches(row.p24h)}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                }
+            }
+
+            let footerHTML = `
+                <div class="card-footer">
+                    <a class="nws-link" href="${station.timeseriesUrl}" target="_blank" rel="noopener">
+                        📊 View NWS Timeseries →
+                    </a>
+                    <span class="last-updated">${result.lastObsTime ? formatTime(result.lastObsTime) : ''}</span>
+                </div>
+            `;
+
+            card.className = `station-card ${hasPrecip ? 'has-rain' : ''}`;
+            card.innerHTML = `
+                ${hasPrecip ? createRaindrops() : ''}
+                <div class="card-header">
+                    <div>
+                        <div class="station-name">${station.name}</div>
+                        <div class="station-id">${station.id} · ${station.subtitle}</div>
+                    </div>
+                    <span class="status-badge ${statusClass}">
+                        <span class="status-dot"></span>
+                        ${statusText}
+                    </span>
+                </div>
+                <div class="card-body">${bodyHTML}</div>
+                ${footerHTML}
+            `;
+        }
+
+        function updateSummary() {
+            let rain = 0, dry = 0, errors = 0, pending = 0;
+            STATIONS.forEach(s => {
+                const r = stationResults[s.id];
+                if (!r) { pending++; return; }
+                if (r.error) { errors++; return; }
+                if (r.hasPrecipitation) rain++; else dry++;
+            });
+
+            document.getElementById('rainCount').textContent = rain;
+            document.getElementById('dryCount').textContent = dry;
+            document.getElementById('pendingCount').textContent = pending + errors;
+
+            const rainStat = document.getElementById('summaryRain');
+            const dryStat = document.getElementById('summaryDry');
+            const pendingStat = document.getElementById('summaryPending');
+
+            rainStat.className = `summary-stat ${rain > 0 ? 'rain' : 'loading'}`;
+            dryStat.className = `summary-stat ${dry > 0 ? 'dry' : 'loading'}`;
+
+            if (pending === 0 && errors === 0) {
+                pendingStat.style.display = 'none';
+            } else if (errors > 0 && pending === 0) {
+                pendingStat.className = 'summary-stat error';
+                document.querySelector('#summaryPending .stat-icon').textContent = '⚠️';
+                document.querySelector('#summaryPending .stat-label').textContent = 'Errors';
+            } else {
+                pendingStat.style.display = '';
+                pendingStat.className = 'summary-stat loading';
+                document.querySelector('#summaryPending .stat-icon').textContent = '⏳';
+                document.querySelector('#summaryPending .stat-label').textContent = 'Checking';
+            }
+        }
+
+        // Fetch with retry logic for NWS API 502/503 errors
+        async function fetchWithRetry(url, options, maxRetries = 3) {
+            let lastError;
+            for (let attempt = 0; attempt <= maxRetries; attempt++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (response.ok) {
+                        return { data: await response.json(), retries: attempt };
+                    }
+                    // Retry on 5xx server errors
+                    if (response.status >= 500 && attempt < maxRetries) {
+                        lastError = `HTTP ${response.status}`;
+                        await new Promise(r => setTimeout(r, 1000 * (attempt + 1))); // backoff
+                        continue;
+                    }
+                    throw new Error(`HTTP ${response.status}`);
+                } catch (err) {
+                    lastError = err.message || 'Network error';
+                    if (attempt < maxRetries) {
+                        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+                        continue;
+                    }
+                    throw new Error(lastError);
+                }
+            }
+            throw new Error(lastError);
+        }
+
+        async function fetchStationData(station) {
+            const todayStart = getTodayStartUTC();
+            const url = `https://api.weather.gov/stations/${station.id}/observations?start=${todayStart}&limit=200`;
+
+            let retries = 0;
+            try {
+                const { data, retries: r } = await fetchWithRetry(url, {
+                    headers: {
+                        'User-Agent': '(PrecipitationChecker, weather-checker@example.com)',
+                        'Accept': 'application/geo+json'
+                    }
+                });
+                retries = r;
+
+                const features = data.features || [];
+
+                let hasPrecipitation = false;
+                let totalPrecipInches = 0;
+                let precipRows = [];
+                let currentTemp = null;
+                let currentDesc = '';
+                let lastObsTime = null;
+
+                if (features.length > 0) {
+                    const latest = features[0].properties;
+                    lastObsTime = latest.timestamp;
+
+                    // Temperature: convert from °C to °F
+                    if (latest.temperature && latest.temperature.value !== null) {
+                        currentTemp = Math.round(latest.temperature.value * 9 / 5 + 32);
+                    }
+                    currentDesc = latest.textDescription || '';
+                }
+
+                // Track 1-hour precip accumulation to compute daily total
+                // Use a Set to avoid double-counting observations
+                const seenTimestamps = new Set();
+
+                for (const feature of features) {
+                    const props = feature.properties;
+
+                    // Extract precipitation values and convert to inches
+                    const p1hRaw = props.precipitationLastHour;
+                    const p3hRaw = props.precipitationLast3Hours;
+                    const p6hRaw = props.precipitationLast6Hours;
+
+                    const p1h = p1hRaw ? precipToInches(p1hRaw.value, p1hRaw.unitCode) : null;
+                    const p6h = p6hRaw ? precipToInches(p6hRaw.value, p6hRaw.unitCode) : null;
+                    // Use 3-hour as a proxy for 24-hour if no 24-hour field
+                    // NWS API doesn't have a 24-hour field but some stations report it in the METAR
+                    const p24h = null; // NWS API doesn't provide this directly
+
+                    // Check if any precip field has a positive value
+                    const hasPositiveP1h = p1h !== null && p1h > 0;
+                    const hasPositiveP6h = p6h !== null && p6h > 0;
+
+                    if (hasPositiveP1h || hasPositiveP6h) {
+                        hasPrecipitation = true;
+                    }
+
+                    // Accumulate daily total from 1-hour precip readings
+                    if (hasPositiveP1h && !seenTimestamps.has(props.timestamp)) {
+                        totalPrecipInches += p1h;
+                        seenTimestamps.add(props.timestamp);
+                    }
+
+                    // Only add rows where at least one precip field has data (not null)
+                    const hasAnyPrecipData = p1h !== null || p6h !== null;
+                    if (hasAnyPrecipData) {
+                        precipRows.push({
+                            time: props.timestamp,
+                            p1h: p1h,
+                            p6h: p6h,
+                            p24h: p24h
+                        });
+                    }
+
+                    // Also check textDescription for precipitation keywords
+                    if (props.textDescription) {
+                        const desc = props.textDescription.toLowerCase();
+                        const precipWords = ['rain', 'drizzle', 'shower', 'thunderstorm', 'snow', 'sleet', 'hail', 'freezing rain', 'ice pellet'];
+                        if (precipWords.some(w => desc.includes(w))) {
+                            hasPrecipitation = true;
+                            // If we don't have a precip row for this timestamp, add one
+                            if (!hasAnyPrecipData) {
+                                precipRows.push({
+                                    time: props.timestamp,
+                                    p1h: null,
+                                    p6h: null,
+                                    p24h: null,
+                                    desc: props.textDescription
+                                });
+                            }
+                        }
+                    }
+
+                    // Check presentWeather array
+                    if (props.presentWeather && Array.isArray(props.presentWeather)) {
+                        for (const pw of props.presentWeather) {
+                            if (pw && pw.weather) {
+                                const weather = pw.weather.toLowerCase();
+                                if (['rain', 'drizzle', 'snow', 'sleet', 'hail', 'ice', 'precipitation', 'thunderstorm'].some(w => weather.includes(w))) {
+                                    hasPrecipitation = true;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Sort by time descending (most recent first), limit to 8 rows
+                precipRows.sort((a, b) => new Date(b.time) - new Date(a.time));
+                precipRows = precipRows.slice(0, 8);
+
+                return {
+                    hasPrecipitation,
+                    totalPrecipInches,
+                    precipRows,
+                    currentTemp,
+                    currentDesc,
+                    lastObsTime,
+                    totalObservations: features.length,
+                    retries,
+                    error: null
+                };
+            } catch (err) {
+                return {
+                    hasPrecipitation: false,
+                    totalPrecipInches: 0,
+                    precipRows: [],
+                    currentTemp: null,
+                    currentDesc: '',
+                    lastObsTime: null,
+                    totalObservations: 0,
+                    retries,
+                    error: err.message || 'Failed to fetch'
+                };
+            }
+        }
+
+        async function checkStation(station) {
+            const result = await fetchStationData(station);
+            stationResults[station.id] = result;
+            renderCard(station, result);
+            updateSummary();
+        }
+
+        async function refreshAll() {
+            const btn = document.getElementById('refreshBtn');
+            const icon = document.getElementById('refreshIcon');
+            btn.disabled = true;
+            icon.classList.add('spin');
+
+            stationResults = {};
+            updateSummary();
+
+            // Reset cards to loading state
+            const grid = document.getElementById('stationsGrid');
+            grid.innerHTML = STATIONS.map(s => createSkeletonCard(s)).join('');
+
+            // Stagger requests to avoid rate limiting (NWS recommends no more than ~5/sec)
+            const promises = STATIONS.map((station, i) =>
+                new Promise(resolve => {
+                    setTimeout(async () => {
+                        await checkStation(station);
+                        resolve();
+                    }, i * 300);
+                })
+            );
+
+            await Promise.all(promises);
+
+            btn.disabled = false;
+            icon.classList.remove('spin');
+        }
+
+        // Initialize
+        document.getElementById('currentDate').textContent = formatDate(new Date());
+
+        // Create initial skeleton cards
+        const grid = document.getElementById('stationsGrid');
+        grid.innerHTML = STATIONS.map(s => createSkeletonCard(s)).join('');
+
+        // Show pending count
+        document.getElementById('pendingCount').textContent = STATIONS.length;
+
+        // Start fetching
+        refreshAll();
+    </script>
+</body>
+</html>
