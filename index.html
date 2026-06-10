@@ -742,10 +742,7 @@
                         <span class="detail-label">🌤️ Conditions</span>
                         <span class="detail-value">${result.currentDesc || '—'}</span>
                     </div>
-                    <div class="detail-row">
-                        <span class="detail-label">💧 Today's Total</span>
-                        <span class="detail-value ${result.totalPrecipInches > 0 ? 'precip' : 'zero-precip'}">${formatInches(result.totalPrecipInches)}</span>
-                    </div>
+
                 `;
 
                 // Precipitation table — show observations with precip data
