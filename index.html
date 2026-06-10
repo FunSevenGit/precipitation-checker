@@ -860,22 +860,39 @@
 
         async function fetchStationData(station) {
             const todayStart = getTodayStartUTC();
-            const url = `https://api.weather.gov/stations/${station.id}/observations?start=${todayStart}&limit=200`;
+            const firstUrl = `https://api.weather.gov/stations/${station.id}/observations?start=${todayStart}&limit=500`;
+            const fetchOpts = {
+                headers: {
+                    'User-Agent': '(PrecipitationChecker, weather-checker@example.com)',
+                    'Accept': 'application/geo+json'
+                }
+            };
 
             let retries = 0;
             try {
-                const { data, retries: r } = await fetchWithRetry(url, {
-                    headers: {
-                        'User-Agent': '(PrecipitationChecker, weather-checker@example.com)',
-                        'Accept': 'application/geo+json'
-                    }
-                });
+                // Fetch first page
+                const { data, retries: r } = await fetchWithRetry(firstUrl, fetchOpts);
                 retries = r;
 
-                const features = data.features || [];
+                let features = data.features || [];
+
+                // Follow pagination if there are more results
+                let nextUrl = data.pagination && data.pagination.next;
+                let pageCount = 0;
+                while (nextUrl && pageCount < 3) { // max 3 extra pages as safety
+                    try {
+                        const { data: nextData } = await fetchWithRetry(nextUrl, fetchOpts, 1);
+                        const nextFeatures = nextData.features || [];
+                        if (nextFeatures.length === 0) break;
+                        features = features.concat(nextFeatures);
+                        nextUrl = nextData.pagination && nextData.pagination.next;
+                        pageCount++;
+                    } catch (e) {
+                        break; // Don't fail the whole request if pagination fails
+                    }
+                }
 
                 let hasPrecipitation = false;
-                let totalPrecipInches = 0;
                 let precipRows = [];
                 let currentTemp = null;
                 let currentDesc = '';
@@ -892,23 +909,15 @@
                     currentDesc = latest.textDescription || '';
                 }
 
-                // Track 1-hour precip accumulation to compute daily total
-                // Use a Set to avoid double-counting observations
-                const seenTimestamps = new Set();
-
                 for (const feature of features) {
                     const props = feature.properties;
 
                     // Extract precipitation values and convert to inches
                     const p1hRaw = props.precipitationLastHour;
-                    const p3hRaw = props.precipitationLast3Hours;
                     const p6hRaw = props.precipitationLast6Hours;
 
                     const p1h = p1hRaw ? precipToInches(p1hRaw.value, p1hRaw.unitCode) : null;
                     const p6h = p6hRaw ? precipToInches(p6hRaw.value, p6hRaw.unitCode) : null;
-                    // Use 3-hour as a proxy for 24-hour if no 24-hour field
-                    // NWS API doesn't have a 24-hour field but some stations report it in the METAR
-                    const p24h = null; // NWS API doesn't provide this directly
 
                     // Check if any precip field has a positive value
                     const hasPositiveP1h = p1h !== null && p1h > 0;
@@ -918,12 +927,6 @@
                         hasPrecipitation = true;
                     }
 
-                    // Accumulate daily total from 1-hour precip readings
-                    if (hasPositiveP1h && !seenTimestamps.has(props.timestamp)) {
-                        totalPrecipInches += p1h;
-                        seenTimestamps.add(props.timestamp);
-                    }
-
                     // Only add rows where at least one precip field has data (not null)
                     const hasAnyPrecipData = p1h !== null || p6h !== null;
                     if (hasAnyPrecipData) {
@@ -931,7 +934,7 @@
                             time: props.timestamp,
                             p1h: p1h,
                             p6h: p6h,
-                            p24h: p24h
+                            p24h: null
                         });
                     }
 
@@ -967,13 +970,12 @@
                     }
                 }
 
-                // Sort by time descending (most recent first), limit to 8 rows
+                // Sort by time descending (most recent first), limit to 12 rows
                 precipRows.sort((a, b) => new Date(b.time) - new Date(a.time));
-                precipRows = precipRows.slice(0, 8);
+                precipRows = precipRows.slice(0, 12);
 
                 return {
                     hasPrecipitation,
-                    totalPrecipInches,
                     precipRows,
                     currentTemp,
                     currentDesc,
@@ -985,7 +987,6 @@
             } catch (err) {
                 return {
                     hasPrecipitation: false,
-                    totalPrecipInches: 0,
                     precipRows: [],
                     currentTemp: null,
                     currentDesc: '',
@@ -996,6 +997,7 @@
                 };
             }
         }
+
 
         async function checkStation(station) {
             const result = await fetchStationData(station);
