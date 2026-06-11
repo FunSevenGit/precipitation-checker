@@ -672,9 +672,10 @@
         }
 
         function getTodayStartUTC() {
+            // Use LOCAL midnight (not UTC midnight) so "today" matches the user's calendar day
             const now = new Date();
-            const start = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0));
-            return start.toISOString();
+            const localMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+            return localMidnight.toISOString();
         }
 
         function createSkeletonCard(station) {
@@ -860,37 +861,19 @@
 
         async function fetchStationData(station) {
             const todayStart = getTodayStartUTC();
-            const firstUrl = `https://api.weather.gov/stations/${station.id}/observations?start=${todayStart}&limit=500`;
-            const fetchOpts = {
-                headers: {
-                    'User-Agent': '(PrecipitationChecker, weather-checker@example.com)',
-                    'Accept': 'application/geo+json'
-                }
-            };
+            const url = `https://api.weather.gov/stations/${station.id}/observations?start=${todayStart}&limit=500`;
 
             let retries = 0;
             try {
-                // Fetch first page
-                const { data, retries: r } = await fetchWithRetry(firstUrl, fetchOpts);
+                const { data, retries: r } = await fetchWithRetry(url, {
+                    headers: {
+                        'User-Agent': '(PrecipitationChecker, weather-checker@example.com)',
+                        'Accept': 'application/geo+json'
+                    }
+                });
                 retries = r;
 
-                let features = data.features || [];
-
-                // Follow pagination if there are more results
-                let nextUrl = data.pagination && data.pagination.next;
-                let pageCount = 0;
-                while (nextUrl && pageCount < 3) { // max 3 extra pages as safety
-                    try {
-                        const { data: nextData } = await fetchWithRetry(nextUrl, fetchOpts, 1);
-                        const nextFeatures = nextData.features || [];
-                        if (nextFeatures.length === 0) break;
-                        features = features.concat(nextFeatures);
-                        nextUrl = nextData.pagination && nextData.pagination.next;
-                        pageCount++;
-                    } catch (e) {
-                        break; // Don't fail the whole request if pagination fails
-                    }
-                }
+                const features = data.features || [];
 
                 let hasPrecipitation = false;
                 let precipRows = [];
@@ -902,7 +885,6 @@
                     const latest = features[0].properties;
                     lastObsTime = latest.timestamp;
 
-                    // Temperature: convert from °C to °F
                     if (latest.temperature && latest.temperature.value !== null) {
                         currentTemp = Math.round(latest.temperature.value * 9 / 5 + 32);
                     }
@@ -912,24 +894,19 @@
                 for (const feature of features) {
                     const props = feature.properties;
 
-                    // Extract precipitation values and convert to inches
                     const p1hRaw = props.precipitationLastHour;
                     const p6hRaw = props.precipitationLast6Hours;
 
                     const p1h = p1hRaw ? precipToInches(p1hRaw.value, p1hRaw.unitCode) : null;
                     const p6h = p6hRaw ? precipToInches(p6hRaw.value, p6hRaw.unitCode) : null;
 
-                    // Check if any precip field has a positive value
-                    const hasPositiveP1h = p1h !== null && p1h > 0;
-                    const hasPositiveP6h = p6h !== null && p6h > 0;
-
-                    if (hasPositiveP1h || hasPositiveP6h) {
+                    // Only flag precipitation based on actual numeric values > 0
+                    if ((p1h !== null && p1h > 0) || (p6h !== null && p6h > 0)) {
                         hasPrecipitation = true;
                     }
 
-                    // Only add rows where at least one precip field has data (not null)
-                    const hasAnyPrecipData = p1h !== null || p6h !== null;
-                    if (hasAnyPrecipData) {
+                    // Add rows where at least one precip field reported a value
+                    if (p1h !== null || p6h !== null) {
                         precipRows.push({
                             time: props.timestamp,
                             p1h: p1h,
@@ -937,40 +914,9 @@
                             p24h: null
                         });
                     }
-
-                    // Also check textDescription for precipitation keywords
-                    if (props.textDescription) {
-                        const desc = props.textDescription.toLowerCase();
-                        const precipWords = ['rain', 'drizzle', 'shower', 'thunderstorm', 'snow', 'sleet', 'hail', 'freezing rain', 'ice pellet'];
-                        if (precipWords.some(w => desc.includes(w))) {
-                            hasPrecipitation = true;
-                            // If we don't have a precip row for this timestamp, add one
-                            if (!hasAnyPrecipData) {
-                                precipRows.push({
-                                    time: props.timestamp,
-                                    p1h: null,
-                                    p6h: null,
-                                    p24h: null,
-                                    desc: props.textDescription
-                                });
-                            }
-                        }
-                    }
-
-                    // Check presentWeather array
-                    if (props.presentWeather && Array.isArray(props.presentWeather)) {
-                        for (const pw of props.presentWeather) {
-                            if (pw && pw.weather) {
-                                const weather = pw.weather.toLowerCase();
-                                if (['rain', 'drizzle', 'snow', 'sleet', 'hail', 'ice', 'precipitation', 'thunderstorm'].some(w => weather.includes(w))) {
-                                    hasPrecipitation = true;
-                                }
-                            }
-                        }
-                    }
                 }
 
-                // Sort by time descending (most recent first), limit to 12 rows
+                // Sort by time descending, keep up to 12 rows
                 precipRows.sort((a, b) => new Date(b.time) - new Date(a.time));
                 precipRows = precipRows.slice(0, 12);
 
