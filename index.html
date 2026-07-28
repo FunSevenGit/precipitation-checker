@@ -922,6 +922,16 @@
                             p24h: null
                         });
                     }
+
+                    // Also check textDescription for precipitation keywords
+                    // (some stations report rain in descriptions but have null numeric precip)
+                    if (!hasPrecipitation && props.textDescription) {
+                        const desc = props.textDescription.toLowerCase();
+                        const precipWords = ['rain', 'drizzle', 'shower', 'thunderstorm', 'snow', 'sleet', 'hail', 'freezing rain', 'ice pellet'];
+                        if (precipWords.some(w => desc.includes(w))) {
+                            hasPrecipitation = true;
+                        }
+                    }
                 }
 
                 // Sort by time descending, keep up to 12 rows
