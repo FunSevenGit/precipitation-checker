@@ -619,17 +619,17 @@
 
     <script>
         const STATIONS = [
-            { id: 'KNYC', name: 'New York City', subtitle: 'Central Park', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=knyc' },
-            { id: 'KLAX', name: 'Los Angeles', subtitle: 'LAX Airport', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=KLAX' },
-            { id: 'KMDW', name: 'Chicago', subtitle: 'Midway Airport', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=KMDW' },
-            { id: 'KSFO', name: 'San Francisco', subtitle: 'SFO Airport', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=ksfo' },
-            { id: 'KAUS', name: 'Austin', subtitle: 'Austin-Bergstrom', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=KAUS' },
-            { id: 'KMIA', name: 'Miami', subtitle: 'MIA Airport', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=KMIA' },
-            { id: 'KDFW', name: 'Dallas / Fort Worth', subtitle: 'DFW Airport', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=Kdfw' },
-            { id: 'KHOU', name: 'Houston', subtitle: 'Hobby Airport', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=KHOU' },
-            { id: 'KDEN', name: 'Denver', subtitle: 'Denver Intl.', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=KDEN' },
-            { id: 'KSEA', name: 'Seattle', subtitle: 'Sea-Tac Airport', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=ksea' },
-            { id: 'KSPG', name: 'St. Petersburg', subtitle: 'Albert Whitted', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=kspg' },
+            { id: 'KNYC', name: 'New York City', subtitle: 'Central Park', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=knyc', cliLocation: 'NYC', cliSite: 'OKX' },
+            { id: 'KLAX', name: 'Los Angeles', subtitle: 'LAX Airport', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=KLAX', cliLocation: 'LAX', cliSite: 'LOX' },
+            { id: 'KMDW', name: 'Chicago', subtitle: 'Midway Airport', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=KMDW', cliLocation: 'MDW', cliSite: 'LOT' },
+            { id: 'KSFO', name: 'San Francisco', subtitle: 'SFO Airport', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=ksfo', cliLocation: 'SFO', cliSite: 'MTR' },
+            { id: 'KAUS', name: 'Austin', subtitle: 'Austin-Bergstrom', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=KAUS', cliLocation: 'AUS', cliSite: 'EWX' },
+            { id: 'KMIA', name: 'Miami', subtitle: 'MIA Airport', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=KMIA', cliLocation: 'MIA', cliSite: 'MFL' },
+            { id: 'KDFW', name: 'Dallas / Fort Worth', subtitle: 'DFW Airport', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=Kdfw', cliLocation: 'DFW', cliSite: 'FWD' },
+            { id: 'KHOU', name: 'Houston', subtitle: 'Hobby Airport', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=KHOU', cliLocation: 'HOU', cliSite: 'HGX' },
+            { id: 'KDEN', name: 'Denver', subtitle: 'Denver Intl.', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=KDEN', cliLocation: 'DEN', cliSite: 'BOU' },
+            { id: 'KSEA', name: 'Seattle', subtitle: 'Sea-Tac Airport', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=ksea', cliLocation: 'SEA', cliSite: 'SEW' },
+            { id: 'KSPG', name: 'St. Petersburg', subtitle: 'Albert Whitted', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=kspg', cliLocation: 'SPG', cliSite: 'TBW' },
         ];
 
         let stationResults = {};
@@ -735,6 +735,10 @@
                 }
             } else {
                 // Current conditions
+                const mtd = result.mtdPrecip;
+                const mtdDisplay = mtd !== null ? mtd.toFixed(2) + '"' : '—';
+                const mtdClass = mtd !== null && mtd > 0 ? 'precip' : 'zero-precip';
+                const cliUrl = station.cliSite ? `https://forecast.weather.gov/product.php?site=${station.cliSite}&product=CLI&issuedby=${station.cliLocation}` : null;
                 bodyHTML = `
                     <div class="detail-row">
                         <span class="detail-label">🌡️ Current Temp</span>
@@ -744,7 +748,10 @@
                         <span class="detail-label">🌤️ Conditions</span>
                         <span class="detail-value">${result.currentDesc || '—'}</span>
                     </div>
-
+                    <div class="detail-row">
+                        <span class="detail-label">📊 Month to Date</span>
+                        <span class="detail-value ${mtdClass}">${mtdDisplay}${cliUrl ? ` <a href="${cliUrl}" target="_blank" rel="noopener" style="color:var(--accent-blue);font-size:0.72rem;text-decoration:none;margin-left:4px" title="View CLI Report">📄</a>` : ''}</span>
+                    </div>
                 `;
 
                 // Precipitation table — show observations with precip data
@@ -945,9 +952,67 @@
             }
         }
 
+        // Fetch month-to-date precipitation from the NWS CLI report
+        async function fetchMTDPrecip(station) {
+            if (!station.cliLocation) return null;
+            try {
+                // Step 1: Get latest CLI product ID for this location
+                const listUrl = `https://api.weather.gov/products/types/CLI/locations/${station.cliLocation}`;
+                const { data: listData } = await fetchWithRetry(listUrl, {
+                    headers: {
+                        'User-Agent': '(PrecipitationChecker, weather-checker@example.com)',
+                        'Accept': 'application/ld+json'
+                    }
+                }, 2);
+
+                const products = listData['@graph'] || [];
+                if (products.length === 0) return null;
+
+                const latestId = products[0]['@id'] || products[0].id;
+                const productUrl = typeof latestId === 'string' && latestId.startsWith('http')
+                    ? latestId
+                    : `https://api.weather.gov/products/${latestId}`;
+
+                // Step 2: Fetch the full product text
+                const { data: productData } = await fetchWithRetry(productUrl, {
+                    headers: {
+                        'User-Agent': '(PrecipitationChecker, weather-checker@example.com)',
+                        'Accept': 'application/ld+json'
+                    }
+                }, 2);
+
+                const text = productData.productText || '';
+
+                // Step 3: Parse "MONTH TO DATE" line under PRECIPITATION section
+                // Format:  MONTH TO DATE    7.40                      6.50   0.90     8.09
+                // We want the first number after "MONTH TO DATE"
+                const precipSection = text.split(/PRECIPITATION \(IN\)/i)[1];
+                if (!precipSection) return null;
+
+                // Only look within the precipitation section (stop at next major section)
+                const sectionEnd = precipSection.search(/\n\s*(SNOWFALL|DEGREE DAYS|HEATING|COOLING)/i);
+                const precipText = sectionEnd > 0 ? precipSection.substring(0, sectionEnd) : precipSection;
+
+                const mtdMatch = precipText.match(/MONTH TO DATE\s+([\d.]+|T|MM)/i);
+                if (!mtdMatch) return null;
+
+                const val = mtdMatch[1];
+                if (val === 'T') return 0.005; // Trace
+                if (val === 'MM') return null;  // Missing
+                const parsed = parseFloat(val);
+                return isNaN(parsed) ? null : parsed;
+            } catch (e) {
+                return null; // Don't fail the card if CLI fetch fails
+            }
+        }
 
         async function checkStation(station) {
-            const result = await fetchStationData(station);
+            // Fetch observations and CLI data in parallel
+            const [result, mtdPrecip] = await Promise.all([
+                fetchStationData(station),
+                fetchMTDPrecip(station)
+            ]);
+            result.mtdPrecip = mtdPrecip;
             stationResults[station.id] = result;
             renderCard(station, result);
             updateSummary();
