@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Daily Precipitation Checker</title>
-    <meta name="description" content="Check today's precipitation reports across 10 major US cities in real-time using NWS data.">
+    <meta name="description" content="Check today's precipitation reports across 28 major US cities in real-time using NWS data.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -573,7 +573,7 @@
         <header class="header" id="header">
             <div class="header-icon">🌧️</div>
             <h1>Precipitation Checker</h1>
-            <p class="subtitle">Real-time precipitation reports from 10 major US stations</p>
+            <p class="subtitle">Real-time precipitation reports from <span id="cityCount">28</span> major US cities</p>
             <div class="date-display" id="dateDisplay">
                 <span>📅</span>
                 <span id="currentDate">Loading...</span>
@@ -648,6 +648,9 @@
             { id: 'KDCA', name: 'Washington, DC', subtitle: 'Reagan National', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=KDCA', cliLocation: 'DCA', cliSite: 'LWX' },
             { id: 'KATL', name: 'Atlanta', subtitle: 'Hartsfield-Jackson', timeseriesUrl: 'https://www.weather.gov/wrh/timeseries?site=KATL', cliLocation: 'ATL', cliSite: 'FFC' },
         ];
+
+        // Keep cities in alphabetical order
+        STATIONS.sort((a, b) => a.name.localeCompare(b.name));
 
         let stationResults = {};
 
@@ -1083,6 +1086,7 @@
 
         // Show pending count
         document.getElementById('pendingCount').textContent = STATIONS.length;
+        document.getElementById('cityCount').textContent = STATIONS.length;
 
         // Start fetching
         refreshAll();
